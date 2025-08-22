@@ -1,0 +1,490 @@
+---World Gen code from Factorio world mod oddler_world_gen
+local WorldGen = {}
+
+local Config = require("config")
+local Utils = require("scripts/utils")
+local Worlds = require("data/worlds")
+
+local worldgen
+local world
+local compressed_data
+local decompressed_data
+local debug_ignore = { __debugline = "Decompressed Map Data", __debugchildren = false }
+local skip_generation = Utils.getStartupSetting("em_dev_skip_generation")
+local sqrt, max, random, floor = math.sqrt, math.max, math.random, math.floor
+
+---Terrain codes must be in sync with the ConvertMap code.
+local terrain_codes = {
+  ["_"] = "out-of-map",
+  ["o"] = "deepwater",
+  ["O"] = "deepwater-green",
+  ["w"] = "water",
+  ["W"] = "water-green",
+  ["g"] = "grass-1",
+  ["m"] = "grass-3",
+  ["G"] = "grass-2",
+  ["d"] = "dirt-3",
+  ["D"] = "dirt-6",
+  ["s"] = "sand-1",
+  ["S"] = "sand-3"
+}
+
+-- =============================================================================
+
+---Create a cities table by scaling the position, adding chunk_position, distance_to other cities.
+local function initCities(world_cities, detailed_scale)
+  local offset_cities = {}
+  for _, world_city in pairs(world_cities) do
+    local position = { x = world_city.position.x * detailed_scale, y = world_city.position.y * detailed_scale }
+    local chunk_position = Utils.mapToChunk(position)
+    local map_position = Utils.positionAdd(Utils.chunkToMap(chunk_position), { 16, 16 })
+    local gui_grid = { x = world_city.gui_grid.x, y = world_city.gui_grid.y }
+    offset_cities[world_city.name] = {
+      full_name = world_city.full_name,
+      name = world_city.name,
+      position = map_position,
+      gui_grid = gui_grid,
+      chunk_position = chunk_position
+    }
+  end
+  ---Populate distance_to other cities
+  for _, city in pairs(offset_cities) do
+    city.distance_to = { [city.name] = 0 }
+    for _, other_city in pairs(offset_cities) do
+      if city.name ~= other_city.name then
+        city.distance_to[other_city.name] = Utils.positionDistance(city.position, other_city.position)
+      end
+    end
+  end
+  return offset_cities
+end
+
+-------------------------------------------------------------------------------
+
+local function initCityNames(cities)
+  local city_names = {}
+  for name in pairs(cities) do
+    city_names[#city_names + 1] = name
+  end
+  return city_names
+end
+
+-------------------------------------------------------------------------------
+
+---Create and [x][y] array of cities for quick lookup based on chunk position.
+local function initCityChunks(cities)
+  local city_chunks = {}
+  for _, city in pairs(cities) do
+    city_chunks[city.chunk_position.x] = city_chunks[city.chunk_position.x] or {}
+    local chunk_x = city_chunks[city.chunk_position.x]
+    if chunk_x[city.chunk_position.y] and not Config.DEV_MODE then 
+      error("Chunk position already exists in chunk map: " .. city.name)
+    else
+      chunk_x[city.chunk_position.y] = city
+    end
+  end
+  return city_chunks
+end
+
+-------------------------------------------------------------------------------
+
+---Create and [x][y] array of cities for quick lookup based on gui_grid position.
+local function initGuiGridPositions(cities)
+  local gui_grid = {}
+  for _, city in pairs(cities) do
+    gui_grid[city.gui_grid.x] = gui_grid[city.gui_grid.x] or {}
+    local grid_x = gui_grid[city.gui_grid.x]
+    grid_x[city.gui_grid.y] = city
+  end
+  return gui_grid
+end
+
+-------------------------------------------------------------------------------
+
+---Send a startup setting key to retrieve the value.
+local function getCity(cities, this_world, setting_key)
+  local key = settings.startup[setting_key].value
+  local city = this_world.cities[key] and cities[this_world.cities[key].name]
+  if not city then
+    -- Get a random city, the first index is the string "Random City"
+    city = cities[this_world.cities[this_world.city_names[random(2, #this_world.city_names)]].name]
+  end
+  return city
+end
+
+-------------------------------------------------------------------------------
+
+---Pregenerate the city chunks.
+local function pregenerate_city_chunks(surface, cities, radius)
+  local count = 0
+  for _, city in pairs(cities) do
+    count = count + 1
+    surface.request_to_generate_chunks(city.position, radius)
+  end
+  log("Requesting generation of " .. count .. " cities with a radius of " .. radius .. " on " .. surface.name .. ".\n")
+  surface.force_generate_chunk_requests()
+  log("Generation request complete at tick " .. game.tick)
+end
+
+-------------------------------------------------------------------------------
+
+local function setupForDevMode( em_map_gen_settings )
+  -- map_gen_settings.peaceful_mode = not Utils.getStartupSetting("em_dev_mode") --[[@as boolean]] or map_gen_settings.peaceful_mode
+  em_map_gen_settings.autoplace_controls["enemy-base"].size = 0
+  em_map_gen_settings.autoplace_controls["trees"].size = 0
+  em_map_gen_settings.cliff_settings.richness = 0
+end
+
+-------------------------------------------------------------------------------
+
+--- Create a surface by cloning the first surfaces map generation settings.
+--- 
+local function createSurface(spawn_city)
+  local initial_surface = game.surfaces[1]
+  local em_map_gen_settings = initial_surface.map_gen_settings
+  em_map_gen_settings.width = worldgen.width
+  em_map_gen_settings.height = worldgen.height
+  if Utils.getStartupSetting( "em_team_coop" ) then
+    local starting_points = {}
+    for _, city in pairs( world.cities ) do
+      starting_points[#starting_points+1] = { x = city.position.x, y = city.position.y }
+    end
+    em_map_gen_settings.starting_points = starting_points
+  else
+    em_map_gen_settings.starting_points = { spawn_city.position }
+  end
+  if Utils.getStartupSetting( "em_dev_mode" ) then setupForDevMode( em_map_gen_settings ) end
+  
+  local em_surface
+  if game.surfaces[Config.SURFACE_NAME] == nil then
+    em_surface = game.create_surface( Config.SURFACE_NAME, em_map_gen_settings )
+    em_surface.generate_with_lab_tiles = true
+  else
+    em_surface = game.surfaces[Config.SURFACE_NAME]
+    em_surface.map_gen_settings = em_map_gen_settings
+    em_surface.generate_with_lab_tiles = true
+  end
+  -- remove  Nauvis somehow
+  -- /c local force = game.player.force; game.print( force.name ); force.lock_space_location('nauvis')
+  game.forces["player"].lock_space_location("nauvis")
+  return em_surface
+end
+
+-------------------------------------------------------------------------------
+
+---Get the width of a row of decompressed data. All compressed rows must decompress to the same width.
+---@param row? uint
+---@return uint
+local function getWidth(row)
+  local total_count = 0
+  for count in compressed_data[row or 1]:gmatch("(%d+)")--[[@as fun():integer]] do
+    total_count = total_count + count
+  end
+  return total_count
+end
+
+-------------------------------------------------------------------------------
+
+---Return the cached result or decompress the data and cache and return it.
+local function decompressLineAsString(y)
+  local decompressed_row = decompressed_data[y]
+  -- Return cached value if present
+  if decompressed_row then return decompressed_row end
+
+  local hr = worldgen.decompressed_height_radius
+  local decompressed_letters, i = {}, 1
+
+  local line = compressed_data[y + hr + 1] or compressed_data[y + hr]
+	for letter, count in line:gmatch("(%a+)(%d+)") do
+		decompressed_letters[i] = string.rep(letter, count)
+		i = i + 1
+	end
+
+  decompressed_row = table.concat(decompressed_letters)
+  decompressed_data[y] = decompressed_row -- Cache the result
+	return decompressed_row
+end
+
+-------------------------------------------------------------------------------
+
+---@param x integer
+---@param y integer
+---@return terrain_code #A character tile code
+local function getTileCode(x, y)
+  local hr, wr = worldgen.decompressed_height_radius, worldgen.decompressed_width_radius
+  if (y < -hr or y > hr) or (x < -wr or x > wr) then return "_" end
+  x = x + wr + 1
+  return decompressLineAsString(y):sub(x, x)
+end
+
+-------------------------------------------------------------------------------
+
+---Upvalue for weights to avoid creating a new table every time.
+---All values must be reset to 0 before use.
+local _weightMap = {}
+for code in pairs(terrain_codes) do
+  _weightMap[code] = 0
+end
+
+---@param x double
+---@param y double
+---@return terrain_tile_name
+local function generateTileName(x, y)
+  local scale = worldgen.scale
+  local max_scale = worldgen.max_scale
+  local sqrt_detail = worldgen.sqrt_detail
+
+  x = x / scale
+  y = y / scale
+
+  -- get cells this data point is between
+  local top = floor(y)
+  local bottom = top + 1
+  local left = floor(x)
+  local right = left + 1
+
+  -- get codes
+  local tile_lt = getTileCode(left, top)
+  local tile_rt = getTileCode(right, top)
+  local tile_lb = getTileCode(left, bottom)
+  local tile_rb = getTileCode(right, bottom)
+
+  -- If all the tiles are the same, we don't need to calcuate weights
+  if tile_lt == tile_rt and tile_lt == tile_lb and tile_lt == tile_rb then
+    return terrain_codes[tile_rt]
+  end
+
+  -- if an empty tile code is returned, return out of map code
+  if tile_lt == "" or tile_rt == "" or tile_lb == "" or tile_rb == "" then return terrain_codes["_"] end
+
+  -- Calculate weights
+  -- 1 - sqrt( (top - y) * (top - y) + (left - x) * (left - x) ) / sqrt(2)
+  local ty = top - y
+  ty = ty * ty
+  local by = bottom - y
+  by = by * by
+  local lx = left - x
+  lx = lx * lx
+  local rx = right - x
+  rx = rx * rx
+  local weight_lt = 1 - sqrt(ty + lx) / sqrt_detail
+  weight_lt = weight_lt * weight_lt + random() / max_scale
+  local weight_rt = 1 - sqrt(ty + rx) / sqrt_detail
+  weight_rt = weight_rt * weight_rt + random() / max_scale
+  local weight_lb = 1 - sqrt(by + lx) / sqrt_detail
+  weight_lb = weight_lb * weight_lb + random() / max_scale
+  local weight_rb = 1 - sqrt(by + rx) / sqrt_detail
+  weight_rb = weight_rb * weight_rb + random() / max_scale
+
+  -- update the weight map
+  _weightMap[tile_lt] = _weightMap[tile_lt] + weight_lt
+  _weightMap[tile_rt] = _weightMap[tile_rt] + weight_rt
+  _weightMap[tile_lb] = _weightMap[tile_lb] + weight_lb
+  _weightMap[tile_rb] = _weightMap[tile_rb] + weight_rb
+
+  -- get the best code
+  local best_code = tile_lt
+  if _weightMap[tile_rt] > _weightMap[best_code] then
+    best_code = tile_rt
+  end
+  if _weightMap[tile_lb] > _weightMap[best_code] then
+    best_code = tile_lb
+  end
+  if _weightMap[tile_rb] > _weightMap[best_code] then
+    best_code = tile_rb
+  end
+
+  -- Reset the weight map
+  _weightMap[tile_lt] = 0
+  _weightMap[tile_rt] = 0
+  _weightMap[tile_lb] = 0
+  _weightMap[tile_rb] = 0
+
+  return terrain_codes[best_code]
+end
+
+-- ============================================================================
+
+---Tile cache for set_tiles do not use this anywhere else.
+---The values in the cache are overwritten before being read.
+---This cache is faster to use and provides less GC churn.
+local _tilesCache = {}
+for i = 1, 1024 do
+  _tilesCache[i] = { position = { 0, 0 } }
+end
+
+-------------------------------------------------------------------------------
+
+function WorldGen.onChunkGenerated(event)
+  if event.surface ~= world.surface then return end
+  if skip_generation then return end
+  if not worldgen.ready then return world.surface.delete_chunk(event.position) end
+
+  local lt = event.area.left_top
+  local rb = event.area.right_bottom
+  local count = 0
+  for y = lt.y, rb.y - 1 do
+    for x = lt.x, rb.x - 1 do
+      count = count + 1
+      local tile = _tilesCache[count]
+      tile.name = generateTileName(x, y)
+      tile.position[1] = x
+      tile.position[2] = y
+    end
+  end
+
+  event.surface.set_tiles(_tilesCache, true)
+  local positions = { event.position }
+  event.surface.regenerate_decorative(nil, positions)
+  event.surface.regenerate_entity(nil, positions)
+  return true
+end
+
+-------------------------------------------------------------------------------
+
+local function createForces( world )
+  for _, city in pairs( world.cities ) do
+    if game.forces[ city.name ] == nil then
+      game.create_force( city.name )
+      game.forces[city.name].set_spawn_position( city.position, world.surface )
+      -- remove access to nauvis
+      game.forces[city.name].lock_space_location("nauvis")
+    end
+  end
+end
+
+
+--[[
+  local function createForces( world )
+  for _, city in pairs( world.cities ) do
+    if pcall(game.create_force, city.name) then
+      -- ugly hack to wrap create_force() in `pcall()` to avoid obscure "force already exists" error
+      game.forces[city.name].set_spawn_position( city.position, world.surface )
+    end
+  end
+end
+]]
+
+-------------------------------------------------------------------------------
+
+local function setFriendlyForces()
+  for _, forceOuter in pairs( game.forces ) do
+    if "enemy" ~= forceOuter.name then
+      for  _, forceInner in pairs( game.forces ) do
+        if "enemy" ~= forceInner.name then
+          forceOuter.set_friend( forceInner, true )
+        end
+      end
+      forceOuter.share_chart = true
+    end
+  end
+end
+
+-------------------------------------------------------------------------------
+
+-- create forces for each city
+-- set the world force to spawn city
+-- set_friend for each city pairing
+local function setupForces()
+  createForces( world )
+  setFriendlyForces()
+  return game.forces[world.spawn_city.name]
+end
+
+-------------------------------------------------------------------------------
+
+-- support for Krastorio 2's creep / biomass.  If installed, call remote function to generate it.
+function WorldGen.setK2Creep( surface_index )
+  if remote.interfaces["kr-creep"] and remote.interfaces["kr-creep"]["set_creep_on_surface"] then
+    log( "Generating Krastorio 2 creep: " .. surface_index )
+    remote.call( "kr-creep", "set_creep_on_surface", surface_index, true )
+  end
+end
+  
+-- ============================================================================
+
+---Clear the surface in init and then pregenerate the city chunks.
+function WorldGen.onSurfaceCleared(event)
+  log( "\tSurface cleared at tick " .. event.tick )
+  worldgen.ready = true
+  pregenerate_city_chunks( world.surface, world.cities, Config.CITY_CHUNK_RADIUS )
+end
+
+-------------------------------------------------------------------------------
+
+---Initialize World data
+---This only needs to happen when a new map is created
+---Maps are created with a maximum size based on scale, centered on 0, 0
+function WorldGen.onInit()
+  storage.worldgen = {}
+  storage.world = {}
+  worldgen = storage.worldgen
+  world = storage.world
+
+  worldgen.ready = false
+  worldgen.world_name = settings.startup.em_world_map.value
+  local this_world = Worlds[worldgen.world_name]
+
+  compressed_data = this_world.data
+  decompressed_data = setmetatable({}, debug_ignore)
+
+  -- A value of .5 will give you a 1 to 1 map at 2x (default) detail.
+  worldgen.decompressed_data = decompressed_data
+  worldgen.scale = settings.startup.em_map_scale.value
+  worldgen.detailed_scale = worldgen.scale * Config.DETAIL_LEVEL
+  worldgen.decompressed_width = getWidth()
+  worldgen.decompressed_width_radius = floor((worldgen.decompressed_width + 0.5) / 2)
+  worldgen.width = floor(worldgen.decompressed_width * worldgen.scale)
+  worldgen.width_radius = floor(worldgen.width / 2)
+  worldgen.decompressed_height = #compressed_data
+  worldgen.decompressed_height_radius = floor((worldgen.decompressed_height + 0.5) / 2)
+  worldgen.height = floor(worldgen.decompressed_height * worldgen.scale)
+  worldgen.height_radius = floor(worldgen.height / 2)
+  worldgen.max_scale = max(worldgen.scale / Config.DETAIL_LEVEL, 20)
+  worldgen.sqrt_detail = sqrt(Config.DETAIL_LEVEL)
+
+  world.cities = initCities(this_world.cities, worldgen.detailed_scale)
+  world.city_names = initCityNames(world.cities)
+  world.city_chunks = initCityChunks(world.cities)
+  world.gui_grid = initGuiGridPositions(world.cities)
+  world.spawn_city = assert(getCity(world.cities, this_world, this_world.settings.spawn))
+  world.spawn_city.is_spawn_city = true
+  world.silo_city = assert(getCity(world.cities, this_world, this_world.settings.silo))
+  world.surface = createSurface(world.spawn_city)
+  world.surface_index = world.surface.index
+  world.cities_to_generate = #world.city_names
+  world.cities_to_chart = #world.city_names
+
+  world.force = setupForces()
+
+  local h, hr = worldgen.decompressed_height, worldgen.decompressed_height_radius
+  local w, wr = worldgen.decompressed_width, worldgen.decompressed_width_radius
+
+  log(string.format("World initialized: %s, spawn city: %s, silo city %s \n", worldgen.world_name, world.spawn_city.name, world.silo_city.name))
+  log(string.format("World width: %d, height: %d, scale: %0.2f", worldgen.width, worldgen.height, worldgen.scale))
+  log(string.format("Data width: %d[%d], height: %d[%d] \t", w, wr, h, hr))
+  world.surface.clear()
+  -- ToDo: Remove K2 support
+  -- WorldGen.setK2Creep( world.surface.index )
+
+end
+
+-------------------------------------------------------------------------------
+
+---Assign local upvalues to storage.worldgen and storage.world and both data tables
+function WorldGen.onLoad()
+  worldgen = storage.worldgen
+  world = storage.world
+  local world_name = settings.startup.em_world_map.value
+  compressed_data = Worlds[world_name].data
+  decompressed_data = setmetatable(worldgen.decompressed_data, debug_ignore)
+end
+
+-- =============================================================================
+
+if __DebugAdapter then
+  __DebugAdapter.stepIgnore(_tilesCache)
+  __DebugAdapter.stepIgnore(_weightMap)
+end
+
+return WorldGen
