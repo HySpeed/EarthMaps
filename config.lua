@@ -15,7 +15,7 @@ local Config = {
   ALL    = "All",
   SINGLE = "Single",
 
-  DEV_MODE = true, -- Adds startup settings for toggling various developer features
+  DEV_MODE = false, -- Adds startup settings for toggling various developer features
 
   DETAIL_LEVEL      = 2,
   CITY_CHUNK_RADIUS = 0,

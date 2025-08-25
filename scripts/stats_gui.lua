@@ -50,8 +50,11 @@ local function build_stats_info_frame(statistics_frame)
     local current_team_tooltip = "your current team"
     local player = game.players[statistics_frame.player_index]
 
-    for index = 1,  #storage.world.city_names do
-      local city = storage.world.cities[storage.world.city_names[index]]
+    local sorted_cities = Utils.table_copy(storage.world.city_names)
+    table.sort( sorted_cities )
+
+    for index = 1,  #sorted_cities do
+      local city = storage.world.cities[sorted_cities[index]]
       local launch_count = city.rocket_silo.launches_this_silo
       if city.rocket_silo and launch_count then
         local sprite = non_team_sprite
@@ -125,7 +128,7 @@ end
 -------------------------------------------------------------------------------
 
 -- Generate City Tags for the team
--- Bug: requires two events (clicks) for tags to be created
+-- Bug: requires two events (clicks) for tags to be created (no longer a bug?)
 local function createTags( player )
   for _, city in pairs( storage.world.cities ) do
     -- if tag doesn't exist nearby, create it.
@@ -144,16 +147,16 @@ end
 function StatsGUI.onGuiClick(event)
   local player = game.get_player(event.player_index)
   if event.element.name == "em_button_statistics" then
-    local frame_flow = mod_gui.get_frame_flow( player ) 
+    local frame_flow = mod_gui.get_frame_flow( player )
     if frame_flow.em_statistics_frame then
       return frame_flow.em_statistics_frame.destroy() and true
     end
     return open_stats_ui( player )
-  elseif string.sub( event.element.name, 1, 9 ) == "em_team_" then
+  elseif string.sub( event.element.name, 1, 8 ) == "em_team_" then
     local tags = event.element.tags
       player.force = game.forces[tags.city_name]
       createTags( player, tags )
-    local frame_flow = mod_gui.get_frame_flow( player ) 
+    local frame_flow = mod_gui.get_frame_flow( player )
     return frame_flow.em_statistics_frame.destroy() and true
   end
 end

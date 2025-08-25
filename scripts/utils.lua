@@ -422,6 +422,17 @@ function Utils.print(msg, skip_game_print)
   end
 end
 
+
+-------------------------------------------------------------------------------
+
+function Utils.table_copy(original)
+  local copy = {}
+  for k, v in pairs(original) do
+    copy[k] = v
+  end
+  return copy
+end
+
 -------------------------------------------------------------------------------
 
 function Utils.reload_mods()

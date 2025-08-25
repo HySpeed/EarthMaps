@@ -9,7 +9,9 @@ local format_number = Utils.factorio.format_number
 
 local MAIN_FRAME_NAME = "em_teleporter_gui"
 local EMPTY_SPRITE = "em_empty_sprite"
-local CURRENT_CITY_SPRITE = "virtual-signal/signal-anything"
+-- local CURRENT_CITY_SPRITE = "virtual-signal/signal-anything"
+local CURRENT_CITY_SPRITE = "virtual-signal/signal-star"
+-- graphics/icons/signal/signal-star.png
 local EMPTY_SPRITE_BUTTON = { 
   type = "sprite", 
   sprite = "em_empty_sprite", 
