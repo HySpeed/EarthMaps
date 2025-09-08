@@ -159,10 +159,15 @@ end
 local function createSilo( surface, city )
   local offset_position = Utils.positionAdd( city.position, Config.SILO_OFFSET )
 
+  --  if settings is global co-op, set silo force to city force
+  local silo_force = world.force
+  if settings.startup.em_team_coop then silo_force = city.force end
+
+
   ---@type LuaSurface.create_entity_param
   local build_params = {
     name = Config.ROCKET_SILO,
-    force = world.force,
+    force = silo_force,
     position = offset_position,
     move_stuck_players = true,
     raise_built = true,

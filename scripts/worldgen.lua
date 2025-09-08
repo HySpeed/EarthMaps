@@ -347,6 +347,7 @@ local function createForces( world )
     if game.forces[ city.name ] == nil then
       game.create_force( city.name )
       game.forces[city.name].set_spawn_position( city.position, world.surface )
+      city.force = game.forces[city.name]
       -- remove access to nauvis
       game.forces[city.name].lock_space_location("nauvis")
     end
