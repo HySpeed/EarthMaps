@@ -40,15 +40,22 @@ end
 
 -------------------------------------------------------------------------------
 
----@param force LuaForce
-local function enableSiloCrafting( force )
-  local recipe = force.recipes[Config.ROCKET_SILO]
-  local technology = force.technologies[Config.ROCKET_SILO]
+-- loop through forces, enabling silo crafting
+local function enableSiloCrafting()
+  if Utils.getStartupSetting( "em_team_coop" ) then
+    for _, city in pairs( storage.world.cities ) do
+      local force      = game.forces[city.name]
+      local recipe     = force.recipes[Config.ROCKET_SILO]
+      local technology = force.technologies[Config.ROCKET_SILO]
 
-  if not technology.researched then return end
-  if recipe.enabled then return end
-  recipe.enabled = true
-  game.print { "", { "em.text_mod_name" }, " ", { "em.text_silo_crafting_enabled" } }
+      if technology.researched then
+        if not recipe.enabled then
+          recipe.enabled = true
+          game.print { "", { "em.text_mod_name" }, " ", { "em.text_silo_crafting_enabled" } }
+        end
+      end
+    end
+  end
 end
 
 -------------------------------------------------------------------------------
@@ -140,18 +147,18 @@ end
 
 -------------------------------------------------------------------------------
 
-local function allRocketLaunched( rocket)
-  local force = rocket.force
-  enableSiloCrafting( force ) -- Reenable silo crafting (this will check if the recipe is already disabled)
+local function allRocketLaunched()
+  enableSiloCrafting() -- Reenable silo crafting (this will check if the recipe is already disabled)
   if pre_place_silo == Config.ALL then -- re-enable all silos
     enableSilos()
   end
-  game.set_game_state( {
-    game_finished = true,
-    player_won = true,
-    can_continue = true,
-    victorious_force = force
-  } )
+  if not game.finished then
+    game.set_game_state( {
+      game_finished = true,
+      player_won = true,
+      can_continue = true
+    } )
+  end
 end
 
 -------------------------------------------------------------------------------
@@ -239,7 +246,6 @@ function Silo.onRocketLaunched( event )
   if not rocket_silo or pre_place_silo == Config.NONE then return end
   local city = {}
   local this_rocket_silo = nil
-  local rocket = event.rocket
 
   -- no longer valid (v2.0) to launch an empty rocket.
   -- if not rocket.has_items_inside() then
@@ -260,7 +266,7 @@ function Silo.onRocketLaunched( event )
   if remaining_launches > 0 then
     countRocketLaunched( event, this_rocket_silo, remaining_launches )
   else -- remaining launches <= 0
-    allRocketLaunched( rocket )
+    allRocketLaunched()
   end
 end
 
@@ -277,7 +283,7 @@ function Silo.onResearchFinished(event)
 
   local recipes = event.research.force.recipes
   if recipes[Config.ROCKET_SILO] then
-    log("Disabling Silo recipe ")
+    -- log("Disabling Silo recipe ")
     recipes[Config.ROCKET_SILO].enabled = false
   end
 end
