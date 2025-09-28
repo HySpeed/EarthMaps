@@ -164,8 +164,7 @@ local function createSurface(spawn_city)
     em_surface.map_gen_settings = em_map_gen_settings
     em_surface.generate_with_lab_tiles = true
   end
-  -- remove  Nauvis somehow
-  -- /c local force = game.player.force; game.print( force.name ); force.lock_space_location('nauvis')
+  -- remove  Nauvis
   game.forces["player"].lock_space_location("nauvis")
   return em_surface
 end
@@ -347,6 +346,7 @@ local function createForces( world )
     if game.forces[ city.name ] == nil then
       game.create_force( city.name )
       game.forces[city.name].set_spawn_position( city.position, world.surface )
+      city.force = game.forces[city.name]
       -- remove access to nauvis
       game.forces[city.name].lock_space_location("nauvis")
     end

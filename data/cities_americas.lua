@@ -2,7 +2,7 @@
 -- These are the choices in the mod settings panel before starting the game.
 
 
--- [[
+--[[
 local cities_americas = {
   ["Central America, Mexico, Mexico City"]      = { gui_grid ={ x =  8, y =  7 }, position = { x =  -213, y =  -107 } },
   ["North America, Canada, Ellesmere Island"]   = { gui_grid ={ x = 11, y =  1 }, position = { x =   212, y = -1407 } },
@@ -38,7 +38,7 @@ local cities_americas = {
 }
 --]]
 
---[[
+-- [[
 -- Dev mode: limited cities
 local cities_americas = {
   ["North America, United States, Boise"]       = { gui_grid ={ x =  7, y =  5 }, position = { x =  -563, y =  -607 } },

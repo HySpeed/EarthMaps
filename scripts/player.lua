@@ -41,7 +41,7 @@ local function setupForDevMode( player )
   player.insert({ name = "rocket-fuel", count = 3 })
   player.insert({ name = "satellite",   count = 5 })
   player.insert({ name = "raw-fish",    count = 5 })
-  player.insert({ name = "cargo-landing-pad",   count = 1 })
+  player.insert({ name = "cargo-landing-pad",   count = 5 })
   player.insert({ name = "small-electric-pole", count = 50 })
 
 end
