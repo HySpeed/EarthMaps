@@ -66,6 +66,10 @@ script.on_configuration_changed( function()
   Utils.moveSiloData()
   Silo.checkEnablingSilos( Utils.calculateMaxLaunches( pre_place_silo ) )
   Silo.setPrePlacedSilo( pre_place_silo )
+  -- disable nauvis
+  for _, force in pairs(game.forces) do
+    force.lock_space_location("nauvis")
+  end
 end )
 
 -------------------------------------------------------------------------------
