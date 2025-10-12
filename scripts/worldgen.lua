@@ -169,7 +169,15 @@ local function createSurface(spawn_city)
   return em_surface
 end
 
--------------------------------------------------------------------------------
+-- for _, force in pairs(game.forces) do
+--   force.lock_space_location("nauvis")
+-- end
+
+
+-- you might have to re-lock the surface in on_configuration_changed
+
+
+----------1---------------------------------------------------------------------
 
 ---Get the width of a row of decompressed data. All compressed rows must decompress to the same width.
 ---@param row? uint
