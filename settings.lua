@@ -231,7 +231,7 @@ data:extend {
     name = "em_drain_energy_on_teleport",
     setting_type = "runtime-global",
     type = "bool-setting",
-    default_value = true,
+    default_value = false,
     order = "t"
   }
 }
