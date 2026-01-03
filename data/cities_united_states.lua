@@ -2,7 +2,7 @@
 -- These are the choices in the mod settings panel before starting the game.
 -- https://www.worldatlas.com/maps/united-states / https://mapcarta.com/United_States_of_America
 
-
+-- remove the space between "--" and "[[" to comment out the block:
 -- [[
 local cities_united_states = {
   ["United States, Alabama, Montgomery"]       = { gui_grid ={ x = 11, y =  9 }, position = { x =   250, y =   100 } },
@@ -59,7 +59,7 @@ local cities_united_states = {
 --[[
 -- Dev mode: limited cities
 local cities_united_states = {
-["United States, Pennsylvania, Harrisburg"]  = { gui_grid ={ x = 16, y =  5 }, position = { x =   466, y =   -74 } },
+  ["United States, Pennsylvania, Harrisburg"]  = { gui_grid ={ x = 16, y =  5 }, position = { x =   466, y =   -74 } },
   ["United States, Rhode Island, Providence"]  = { gui_grid ={ x = 19, y =  4 }, position = { x =   583, y =  -111 } },
   ["United States, South Carolina, Columbia"]  = { gui_grid ={ x = 13, y =  8 }, position = { x =   362, y =    56 } },
 }

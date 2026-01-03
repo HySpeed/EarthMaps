@@ -168,7 +168,13 @@ local function createSilo( surface, city )
 
   --  if settings is global co-op, set silo force to city force
   local silo_force = world.force
-  if settings.startup.em_team_coop then silo_force = city.force end
+  if settings.startup.em_team_coop.value == true then
+    log( "team coop - city.force" )
+    silo_force = city.force
+  else
+    log( "not team coop - starting city force" )
+    silo_force = world.spawn_city.force
+  end
 
 
   ---@type LuaSurface.create_entity_param

@@ -209,6 +209,14 @@ Speed up the game for mapping and moving during testing
 
 * /sc game.speed=10
 
+### Force
+
+Check Entity (e.g. Silo) Force (aka Team)
+
+! Hover mouse over the entity
+
+* /sc game.player.selected.force
+
 ### Items
 
 Add items to the player's inventory:
