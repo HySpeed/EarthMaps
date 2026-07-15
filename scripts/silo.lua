@@ -277,6 +277,19 @@ end
 
 -------------------------------------------------------------------------------
 
+function Silo.onPreScenarioFinished(event)
+  -- Guard against premature victory - only allow win if the mod's goal is met
+  if not event.player_won then return end
+
+  local remaining_launches = Utils.calculateRemainingLaunches()
+  if remaining_launches > 0 then
+    -- Goal not yet reached, cancel the victory
+    game.reset_game_state()
+  end
+end
+
+-------------------------------------------------------------------------------
+
 function Silo.onResearchFinished(event)
   if not event then return end
   if not event.research then return end
