@@ -129,6 +129,8 @@ script.on_event( defines.events.on_research_finished, Silo.onResearchFinished )
 
 script.on_event( defines.events.on_rocket_launched, Silo.onRocketLaunched )
 
+script.on_event( defines.events.on_pre_scenario_finished, Silo.onPreScenarioFinished )
+
 if Utils.getStartupSetting( "em_dev_mode" ) then
   script.on_event( "em-reload-mods", Utils.reload_mods )
   script.on_event( "em-run-function", run_test_function )
